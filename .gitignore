@@ -1,0 +1,22 @@
+# Dependencias de Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Build de Next.js
+.next/
+out/
+build/
+
+# Archivos de caché
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Archivos generados por npm o yarn
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
