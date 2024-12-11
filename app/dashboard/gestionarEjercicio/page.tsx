@@ -1,11 +1,11 @@
 "use client";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import axios from "axios";
 import {
   Dialog,
   DialogContent,
@@ -29,86 +29,87 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type Exercise = {
+interface Muscle {
+  id: number;
+  name: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Exercise {
   id: number;
   name: string;
   description: string;
-  muscle: string;
-  category: string;
+  muscle: number;
+  category: number;
   videoUrl: string;
   imageUrl: string;
-};
-
-// Simulated list of muscles from a database
-const muscles = [
-  "Pectorales",
-  "Dorsales",
-  "Deltoides",
-  "Bíceps",
-  "Tríceps",
-  "Cuádriceps",
-  "Isquiotibiales",
-  "Gemelos",
-  "Abdominales",
-  "Glúteos",
-];
+}
 
 export default function ExerciseManager() {
-  const [exercises, setExercises] = useState<Exercise[]>([
-    {
-      id: 1,
-      name: "Sentadillas",
-      description: "Ejercicio para piernas y glúteos",
-      muscle: "Cuádriceps",
-      category: "Fuerza",
-      videoUrl: "",
-      imageUrl: "",
-    },
-    {
-      id: 2,
-      name: "Flexiones",
-      description: "Ejercicio para pecho y tríceps",
-      muscle: "Pectorales",
-      category: "Calistenia",
-      videoUrl: "",
-      imageUrl: "",
-    },
-  ]);
+  const [exerciseData, setExerciseData] = useState<Exercise[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [muscleNames, setMuscleNames] = useState<Muscle[]>([]);
+  const [categoryNames, setCategoryNames] = useState<Category[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredExercises = exercises.filter(
+  useEffect(() => {
+    axios
+      .get("http://localhost:5000/exercises/")
+      .then((response) => setExerciseData(response.data))
+      .catch((error) => setError(error.message));
+  }, []);
+
+  useEffect(() => {
+    axios
+      .get("http://localhost:5000/muscles/")
+      .then((response) => setMuscleNames(response.data))
+      .catch((error) => setError(error.message));
+  }, []);
+
+  useEffect(() => {
+    axios
+      .get("http://localhost:5000/categories/")
+      .then((response) => setCategoryNames(response.data))
+      .catch((error) => setError(error.message));
+  }, []);
+
+  const filteredExercises = exerciseData.filter(
     (exercise) =>
-      exercise.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exercise.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exercise.muscle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      exercise.category.toLowerCase().includes(searchTerm.toLowerCase())
+      (exercise.name &&
+        exercise.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (exercise.description &&
+        exercise.description
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())) ||
+      (exercise.muscle &&
+        exercise.muscle
+          .toString()
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())) ||
+      (exercise.category &&
+        exercise.category
+          .toString()
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()))
   );
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
-    const muscle = formData.get("muscle") as string;
-    const category = formData.get("category") as string;
+    const muscle = Number(formData.get("muscle"));
+    const category = Number(formData.get("category"));
     const videoUrl = formData.get("videoUrl") as string;
     const imageUrl = formData.get("imageUrl") as string;
 
     if (currentExercise) {
-      // Editar ejercicio existente
-      setExercises(
-        exercises.map((ex) =>
-          ex.id === currentExercise.id
-            ? { ...ex, name, description, muscle, category, videoUrl, imageUrl }
-            : ex
-        )
-      );
-    } else {
-      // Crear nuevo ejercicio
-      const newExercise: Exercise = {
-        id: Math.max(0, ...exercises.map((e) => e.id)) + 1,
+      const updatedExercise = {
         name,
         description,
         muscle,
@@ -116,10 +117,55 @@ export default function ExerciseManager() {
         videoUrl,
         imageUrl,
       };
-      setExercises([...exercises, newExercise]);
+
+      try {
+        await axios.put(
+          `http://localhost:5000/exercises/${currentExercise.id}`,
+          updatedExercise
+        );
+
+        setExerciseData((prevData) =>
+          prevData.map((ex) =>
+            ex.id === currentExercise.id ? { ...ex, ...updatedExercise } : ex
+          )
+        );
+      } catch (error) {
+        console.error("Error al editar el ejercicio:", error);
+      }
+    } else {
+      const newExercise = {
+        name,
+        description,
+        muscle,
+        category,
+        videoUrl,
+        imageUrl,
+      };
+
+      try {
+        const response = await axios.post(
+          "http://localhost:5000/exercises/",
+          newExercise
+        );
+
+        // Agregar el nuevo ejercicio al estado inmediatamente
+        setExerciseData((prevData) => [...prevData, response.data]);
+      } catch (error) {
+        console.error("Error al crear el ejercicio:", error);
+      }
     }
+
     setIsOpen(false);
     setCurrentExercise(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await axios.delete(`http://localhost:5000/exercises/${id}`);
+      setExerciseData((prevData) => prevData.filter((ex) => ex.id !== id));
+    } catch (error) {
+      console.error("Error al eliminar el ejercicio:", error);
+    }
   };
 
   const handleEdit = (exercise: Exercise) => {
@@ -127,13 +173,11 @@ export default function ExerciseManager() {
     setIsOpen(true);
   };
 
-  const handleDelete = (id: number) => {
-    setExercises(exercises.filter((ex) => ex.id !== id));
-  };
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Gestión de Ejercicios</h1>
+
+      {error && <div className="text-red-500 mb-4">{error}</div>}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
@@ -153,6 +197,7 @@ export default function ExerciseManager() {
               <Input
                 id="name"
                 name="name"
+                type="text"
                 defaultValue={currentExercise?.name}
                 required
               />
@@ -162,6 +207,7 @@ export default function ExerciseManager() {
               <Textarea
                 id="description"
                 name="description"
+                typeof="text"
                 defaultValue={currentExercise?.description}
                 required
               />
@@ -170,15 +216,15 @@ export default function ExerciseManager() {
               <Label htmlFor="muscle">Músculo</Label>
               <Select
                 name="muscle"
-                defaultValue={currentExercise?.muscle || muscles[0]}
+                defaultValue={currentExercise?.muscle.toString() || ""}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un músculo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {muscles.map((muscle) => (
-                    <SelectItem key={muscle} value={muscle}>
-                      {muscle}
+                  {muscleNames.map((muscle) => (
+                    <SelectItem key={muscle.id} value={muscle.id.toString()}>
+                      {muscle.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -186,12 +232,24 @@ export default function ExerciseManager() {
             </div>
             <div>
               <Label htmlFor="category">Categoría</Label>
-              <Input
-                id="category"
+              <Select
                 name="category"
-                defaultValue={currentExercise?.category}
-                required
-              />
+                defaultValue={currentExercise?.category.toString() || ""}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona una categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryNames.map((category) => (
+                    <SelectItem
+                      key={category.id}
+                      value={category.id.toString()}
+                    >
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="videoUrl">URL del Video</Label>
@@ -214,7 +272,7 @@ export default function ExerciseManager() {
         </DialogContent>
       </Dialog>
 
-      <div className="mt-4 mb-4">
+      <div className="mb-4 flex">
         <Input
           type="text"
           placeholder="Buscar ejercicio..."
@@ -223,13 +281,13 @@ export default function ExerciseManager() {
         />
       </div>
 
-      <Table className="mt-4">
+      <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
+            <TableHead>Descripción</TableHead>
             <TableHead>Músculo</TableHead>
             <TableHead>Categoría</TableHead>
-            <TableHead>Descripción</TableHead>
             <TableHead>Video</TableHead>
             <TableHead>Imagen</TableHead>
             <TableHead>Acciones</TableHead>
@@ -239,39 +297,24 @@ export default function ExerciseManager() {
           {filteredExercises.map((exercise) => (
             <TableRow key={exercise.id}>
               <TableCell>{exercise.name}</TableCell>
+              <TableCell>{exercise.description}</TableCell>
               <TableCell>{exercise.muscle}</TableCell>
               <TableCell>{exercise.category}</TableCell>
-              <TableCell>{exercise.description}</TableCell>
+              <TableCell>{exercise.videoUrl}</TableCell>
+              <TableCell>{exercise.imageUrl}</TableCell>
               <TableCell>
-                {exercise.videoUrl && (
-                  <a
-                    href={exercise.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 hover:underline"
-                  >
-                    Ver video
-                  </a>
-                )}
-              </TableCell>
-              <TableCell>
-                {exercise.imageUrl && (
-                  <img
-                    src={exercise.imageUrl}
-                    alt={exercise.name}
-                    className="w-10 h-10 object-cover"
-                  />
-                )}
-              </TableCell>
-              <TableCell>
-                <Button variant="ghost" onClick={() => handleEdit(exercise)}>
-                  <Edit className="h-4 w-4" />
+                <Button
+                  variant="link"
+                  onClick={() => handleEdit(exercise)}
+                  className="mr-2"
+                >
+                  <Edit />
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="link"
                   onClick={() => handleDelete(exercise.id)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 />
                 </Button>
               </TableCell>
             </TableRow>
