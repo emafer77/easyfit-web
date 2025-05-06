@@ -35,6 +35,9 @@ Asegúrate de tener instalados:
 git clone https://github.com/emafer77/easyfit-web.git
 cd easyfit-web
 ```
+```bash
+npm install
+```
 
 ### **correr el proyecto **
 
